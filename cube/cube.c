@@ -94,7 +94,7 @@
 bool in_callback = false;
 #define ERR_EXIT(err_msg, err_class)                                             \
     do {                                                                         \
-        if (!demo->suppress_popups) MessageBox(NULL, err_msg, err_class, MB_OK); \
+        if (!demo->suppress_popups) MessageBoxA(NULL, err_msg, err_class, MB_OK); \
         exit(1);                                                                 \
     } while (0)
 void DbgMsg(char *fmt, ...) {
@@ -645,7 +645,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_messenger_callback(VkDebugUtilsMessageSever
 #ifdef _WIN32
 
     in_callback = true;
-    if (!demo->suppress_popups) MessageBox(NULL, message, "Alert", MB_OK);
+    if (!demo->suppress_popups) MessageBoxA(NULL, message, "Alert", MB_OK);
     in_callback = false;
 
 #elif defined(ANDROID)
@@ -2734,7 +2734,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
             PostQuitMessage(validation_error);
             break;
         case WM_PAINT:
-            // The validation callback calls MessageBox which can generate paint
+            // The validation callback calls MessageBoxA which can generate paint
             // events - don't make more Vulkan calls if we got here from the
             // callback
             if (!in_callback) {
@@ -2779,10 +2779,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 }
 
 static void demo_create_window(struct demo *demo) {
-    WNDCLASSEX win_class;
+    WNDCLASSEXA win_class;
 
     // Initialize the window class structure:
-    win_class.cbSize = sizeof(WNDCLASSEX);
+    win_class.cbSize = sizeof(WNDCLASSEXA);
     win_class.style = CS_HREDRAW | CS_VREDRAW;
     win_class.lpfnWndProc = WndProc;
     win_class.cbClsExtra = 0;
@@ -2795,7 +2795,7 @@ static void demo_create_window(struct demo *demo) {
     win_class.lpszClassName = demo->name;
     win_class.hIconSm = LoadIcon(NULL, IDI_WINLOGO);
     // Register window class:
-    if (!RegisterClassEx(&win_class)) {
+    if (!RegisterClassExA(&win_class)) {
         // It didn't work, so try to give a useful error:
         printf("Unexpected error trying to start the application!\n");
         fflush(stdout);
@@ -2804,7 +2804,7 @@ static void demo_create_window(struct demo *demo) {
     // Create window with the registered class:
     RECT wr = {0, 0, demo->width, demo->height};
     AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, FALSE);
-    demo->window = CreateWindowEx(0,
+    demo->window = CreateWindowExA(0,
                                   demo->name,            // class name
                                   demo->name,            // app name
                                   WS_OVERLAPPEDWINDOW |  // window style
@@ -4879,7 +4879,7 @@ static void demo_init(struct demo *demo, int argc, char **argv) {
         snprintf(usage, length + 1, message, APP_SHORT_NAME, available_wsi_platforms, VK_PRESENT_MODE_IMMEDIATE_KHR,
                  VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_FIFO_KHR, VK_PRESENT_MODE_FIFO_RELAXED_KHR);
 #if defined(_WIN32)
-        if (!demo->suppress_popups) MessageBox(NULL, usage, "Usage Error", MB_OK);
+        if (!demo->suppress_popups) MessageBoxA(NULL, usage, "Usage Error", MB_OK);
 #else
         fprintf(stderr, "%s", usage);
         fflush(stderr);
