@@ -553,6 +553,7 @@ struct demo {
     bool use_break;
     bool suppress_popups;
     bool force_errors;
+    bool force_separate_present_queue;
 
     VkDebugUtilsMessengerEXT dbg_messenger;
 
@@ -1233,22 +1234,22 @@ static void demo_draw(struct demo *demo) {
     submit_info.pCommandBuffers = &current_submission.cmd;
     submit_info.signalSemaphoreCount = 1;
     submit_info.pSignalSemaphores = &current_swapchain_resource.draw_complete_semaphore;
-    err = vkQueueSubmit(demo->graphics_queue, 1, &submit_info, current_submission.fence);
+    VkFence graphics_queue_fence = demo->separate_present_queue ? VK_NULL_HANDLE : current_submission.fence;
+    err = vkQueueSubmit(demo->graphics_queue, 1, &submit_info, graphics_queue_fence);
     assert(!err);
 
     if (demo->separate_present_queue) {
         // If we are using separate queues, change image ownership to the
         // present queue before presenting, waiting for the draw complete
         // semaphore and signalling the ownership released semaphore when finished
-        VkFence nullFence = VK_NULL_HANDLE;
-        pipe_stage_flags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        pipe_stage_flags = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
         submit_info.waitSemaphoreCount = 1;
         submit_info.pWaitSemaphores = &current_swapchain_resource.draw_complete_semaphore;
         submit_info.commandBufferCount = 1;
         submit_info.pCommandBuffers = &current_submission.graphics_to_present_cmd;
         submit_info.signalSemaphoreCount = 1;
         submit_info.pSignalSemaphores = &current_swapchain_resource.image_ownership_semaphore;
-        err = vkQueueSubmit(demo->present_queue, 1, &submit_info, nullFence);
+        err = vkQueueSubmit(demo->present_queue, 1, &submit_info, current_submission.fence);
         assert(!err);
     }
 
@@ -2514,7 +2515,7 @@ static void demo_prepare(struct demo *demo) {
             .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
             .pNext = NULL,
             .queueFamilyIndex = demo->present_queue_family_index,
-            .flags = 0,
+            .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
         };
         err = vkCreateCommandPool(demo->device, &present_cmd_pool_info, NULL, &demo->present_cmd_pool);
         assert(!err);
@@ -4631,6 +4632,9 @@ static void demo_init_vk_swapchain(struct demo *demo) {
         if ((demo->queue_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0) {
             if (graphicsQueueFamilyIndex == UINT32_MAX) {
                 graphicsQueueFamilyIndex = i;
+                if (demo->force_separate_present_queue) {
+                    break;
+                }
             }
 
             if (supportsPresent[i] == VK_TRUE) {
@@ -4645,6 +4649,10 @@ static void demo_init_vk_swapchain(struct demo *demo) {
         // If didn't find a queue that supports both graphics and present, then
         // find a separate present queue.
         for (uint32_t i = 0; i < demo->queue_family_count; ++i) {
+            if (demo->force_separate_present_queue && i == graphicsQueueFamilyIndex) {
+                continue;
+            }
+
             if (supportsPresent[i] == VK_TRUE) {
                 presentQueueFamilyIndex = i;
                 break;
@@ -4777,6 +4785,10 @@ static void demo_init(struct demo *demo, int argc, char **argv) {
             demo->force_errors = true;
             continue;
         }
+        if (strcmp(argv[i], "--force_separate_present_queue") == 0) {
+            demo->force_separate_present_queue = true;
+            continue;
+        }
         if ((strcmp(argv[i], "--wsi") == 0) && (i < argc - 1)) {
             size_t argc_len = strlen(argv[i + 1]);
             for (size_t argc_i = 0; argc_i < argc_len; argc_i++) {
@@ -4864,6 +4876,7 @@ static void demo_init(struct demo *demo, int argc, char **argv) {
             "\t[--present_mode <present mode enum>]\n"
             "\t[--width <width>] [--height <height>]\n"
             "\t[--force_errors]\n"
+            "\t[--force_separate_present_queue]\n"
             "\t[--wsi <%s>]\n"
             "\t<present_mode_enum>\n"
             "\t\tVK_PRESENT_MODE_IMMEDIATE_KHR = %d\n"
